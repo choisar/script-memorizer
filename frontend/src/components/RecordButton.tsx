@@ -1,12 +1,27 @@
 "use client";
 
 import React, { useState } from "react";
-import { Mic, Square, Loader2, Volume2, AlertCircle, Radio } from "lucide-react";
+import {
+  Mic,
+  Square,
+  Loader2,
+  Volume2,
+  AlertCircle,
+  Radio,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useMediaRecorder } from "@/hooks/useMediaRecorder";
 
 interface RecordButtonProps {
   disabled: boolean;
   isEvaluating: boolean;
+  isRetry?: boolean;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  onPrev?: () => void;
+  onNext?: () => void;
   onStartBlindTest: () => void;
   onEvaluate: (audioBlob: Blob, liveText?: string) => Promise<void>;
 }
@@ -14,9 +29,16 @@ interface RecordButtonProps {
 export const RecordButton: React.FC<RecordButtonProps> = ({
   disabled,
   isEvaluating,
+  isRetry = false,
+  hasPrev = false,
+  hasNext = false,
+  onPrev,
+  onNext,
   onStartBlindTest,
   onEvaluate,
 }) => {
+
+
   const {
     status,
     duration,
@@ -101,38 +123,76 @@ export const RecordButton: React.FC<RecordButtonProps> = ({
         </div>
       )}
 
-      {/* 녹음 제어 버튼 */}
-      {isRecording ? (
-        <button
-          onClick={handleStop}
-          className="flex items-center justify-center gap-2.5 px-6 py-3.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold rounded-xl shadow-lg shadow-rose-200 transition-all duration-200 w-full sm:w-auto min-w-[240px]"
-        >
-          <Square className="w-5 h-5 fill-current" />
-          <span>녹음 완료 및 평가하기</span>
-        </button>
-      ) : (
-        <button
-          onClick={handleStart}
-          disabled={disabled || isEvaluating}
-          className={`flex items-center justify-center gap-2.5 px-6 py-3.5 font-bold rounded-xl shadow-lg transition-all duration-200 w-full sm:w-auto min-w-[240px] ${
-            disabled || isEvaluating
-              ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-              : "bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-indigo-200"
-          }`}
-        >
-          {isEvaluating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>STT 및 비교 분석 중...</span>
-            </>
-          ) : (
-            <>
-              <Mic className="w-5 h-5" />
-              <span>블라인드 암기 테스트 시작</span>
-            </>
-          )}
-        </button>
-      )}
+      {/* 3단 버튼 바: [ 이전 ]  [ 녹음/다시하기 버튼 ]  [ 다음 ] */}
+      <div className="flex items-center justify-between gap-2.5 sm:gap-3 w-full pt-3 border-t border-slate-100">
+        {onPrev && (
+          <button
+            type="button"
+            onClick={onPrev}
+            disabled={!hasPrev || isRecording || isEvaluating}
+            className="flex items-center justify-center gap-1.5 px-4 sm:px-5 py-3 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none shadow-md shadow-indigo-100 transition-all shrink-0 min-w-[80px]"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>이전</span>
+          </button>
+        )}
+
+        {/* 녹음 제어 버튼 (1회차: 시작 / 2회차 이상: 다시하기 / 녹음중: 완료) */}
+        {isRecording ? (
+          <button
+            type="button"
+            id="main-record-btn"
+            onClick={handleStop}
+            className="flex items-center justify-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold rounded-xl shadow-lg shadow-rose-200 transition-all duration-200 flex-1 min-w-[140px]"
+          >
+            <Square className="w-4 h-4 fill-current" />
+            <span>녹음 완료 및 평가</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            id="main-record-btn"
+            onClick={handleStart}
+            disabled={disabled || isEvaluating}
+            className={`flex items-center justify-center gap-2 px-5 py-3 font-bold rounded-xl shadow-lg transition-all duration-200 flex-1 min-w-[140px] ${
+              disabled || isEvaluating
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                : "bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-indigo-200"
+            }`}
+          >
+            {isEvaluating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>STT 분석 중...</span>
+              </>
+            ) : isRetry ? (
+              <>
+                <RotateCcw className="w-4 h-4" />
+                <span>다시하기</span>
+              </>
+            ) : (
+              <>
+                <Mic className="w-4 h-4" />
+                <span>블라인드 암기 테스트 시작</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {onNext && (
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!hasNext || isRecording || isEvaluating}
+            className="flex items-center justify-center gap-1.5 px-4 sm:px-5 py-3 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none shadow-md shadow-indigo-100 transition-all shrink-0 min-w-[80px]"
+          >
+            <span>다음</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+
 
       {/* 에러 메시지 알림 */}
       {(recorderError || localError) && (

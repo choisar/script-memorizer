@@ -1,6 +1,7 @@
 import io
 import re
 from typing import List, Tuple
+import pypdfium2 as pdfium
 import pdfplumber
 import docx
 from app.models.schemas import ScriptSegment
@@ -12,15 +13,62 @@ SENTENCE_SPLIT_REGEX = re.compile(
     r'(?<=[.?!])(?<!\b\d\.)(?<!\b\d\d\.)(?<!\b[0-9]\.[0-9])(?<!\.\.)\s+(?=[A-Za-z0-9가-힣"\'“‘])'
 )
 
+ITEM_HEADER_REGEX = re.compile(
+    r'^(\d+\.\s+|\d+\)\s*|\(\d+\)\s*|[가-하]\.\s*|[①-⑳]\s*|#{1,6}\s+|\[.*?\])'
+)
+
+ITEM_BODY_OR_NUM_REGEX = re.compile(
+    r'^(\d+\.\s+|\d+\)\s*|\(\d+\)\s*|\d+\s+[가-힣A-Za-z]|[가-하]\.\s*|[①-⑳]\s*|#{1,6}\s+|\[.*?\]|[가-힣A-Za-z0-9_]{1,8}:)'
+)
+
+def unwrap_pdf_lines(text: str) -> str:
+    """PDF에서 페이지 폭에 의해 인위적으로 강제 줄바꿈된 문장을 자연스럽게 합쳐줍니다."""
+    raw_lines = [l.strip() for l in text.replace('\r\n', '\n').split('\n') if l.strip()]
+    merged_lines = []
+
+    for line in raw_lines:
+        if not merged_lines:
+            merged_lines.append(line)
+            continue
+
+        prev = merged_lines[-1]
+        prev_is_header = bool(ITEM_HEADER_REGEX.match(prev))
+        prev_ends_punct = bool(re.search(r'[.?!:]$', prev))
+        curr_is_item = bool(ITEM_BODY_OR_NUM_REGEX.match(line))
+
+        # 앞줄이 제목/항목 헤더가 아니고, 문장부호로 끝나지 않았으며, 뒷줄이 새로운 항목/번호가 아닌 경우 개행 병합
+        if not prev_is_header and not prev_ends_punct and not curr_is_item:
+            merged_lines[-1] = prev + ' ' + line
+        else:
+            merged_lines.append(line)
+
+    return "\n".join(merged_lines)
+
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """PDF 바이트로부터 텍스트를 추출합니다."""
-    text_parts = []
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(page_text.strip())
-    return "\n\n".join(text_parts)
+    """
+    pypdfium2(Chromium 기반 PDFium)를 이용해 텍스트 레이아웃 순서대로 정교하게 추출하고,
+    인위적인 줄바꿈을 복원합니다.
+    """
+    try:
+        pdf = pdfium.PdfDocument(file_bytes)
+        page_texts = []
+        for page in pdf:
+            textpage = page.get_textpage()
+            page_text = textpage.get_text_range()
+            if page_text and page_text.strip():
+                unwrapped = unwrap_pdf_lines(page_text)
+                if unwrapped:
+                    page_texts.append(unwrapped)
+        return "\n\n".join(page_texts)
+    except Exception:
+        # Fallback to pdfplumber if pdfium fails
+        text_parts = []
+        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text.strip())
+        return "\n\n".join(text_parts)
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
     """DOCX 바이트로부터 텍스트를 추출합니다."""
@@ -83,18 +131,24 @@ def split_into_segments(full_text: str) -> List[ScriptSegment]:
     """
     전체 텍스트를 [문단 > 문장] 계층 구조의 ScriptSegment 리스트로 변환합니다.
     - 마크다운 대/중제목(#, ##)이 존재하는 경우, 대/중제목 단위로 문단을 묶어 하위 소제목(###) 및 항목들이 동일 문단 내 세부 문장으로 귀속되도록 합니다.
-    - 대/중제목이 없는 경우, 줄바꿈 2회 이상(\n\n)을 문단 구분으로 처리합니다.
+    - 대/중제목은 없지만 1. , 2. 와 같은 주요 번호 매기기가 2개 이상 존재하는 경우 번호 단위로 상위 문단을 분할합니다.
+    - 그 외의 경우, 줄바꿈 2회 이상(\n\n)을 문단 구분으로 처리합니다.
     - 각 문단 내에서는 줄바꿈 및 문장 부호(.?!)를 기준으로 세부 문장으로 분할합니다.
     """
     normalized_text = full_text.replace("\r\n", "\n").replace("\r", "\n")
 
-    # 문서에 마크다운 대/중제목(#, ##)이 포함되어 있으면 대/중제목 단위로 문단 분할
+    # 1. 문서에 마크다운 대/중제목(#, ##)이 포함되어 있으면 대/중제목 단위로 문단 분할
     if re.search(r'(?m)^#{1,2}\s+', normalized_text):
         raw_chunks = re.split(r'(?m)(?=^#{1,2}\s+)', normalized_text)
         raw_paragraphs = [c.strip() for c in raw_chunks if c.strip()]
+    # 2. 대/중제목은 없지만 1. , 2. 와 같은 주요 번호 매기기가 복수 개 존재하는 경우 번호 단위로 문단 분할
+    elif len(re.findall(r'(?m)^\d+\.\s+', normalized_text)) >= 2:
+        raw_chunks = re.split(r'(?m)(?=^\d+\.\s+)', normalized_text)
+        raw_paragraphs = [c.strip() for c in raw_chunks if c.strip()]
     else:
-        # 일반 대본/텍스트의 경우 빈 줄(\n\n) 기준으로 문단 분할
+        # 3. 일반 대본/텍스트의 경우 빈 줄(\n\n) 기준으로 문단 분할
         raw_paragraphs = [p.strip() for p in re.split(r'\n\s*\n', normalized_text) if p.strip()]
+
 
 
     segments: List[ScriptSegment] = []

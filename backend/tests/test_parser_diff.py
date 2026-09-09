@@ -26,15 +26,29 @@ def test_markdown_and_list_parsing():
     md_script = """## 1. 원 칙(제3조 제1항)
 행정절차법은 행정절차에 관한 일반법이다.
 
-### 1) 독립기관 사항
-1 국회 또는 지방의회의 의결, 2 법원 등의 재판"""
+## 2. 적용배제사항(제3조 제2항)
+### 1) 헌법상 독립기관 등의 판단을 거친 사항
+1 국회 또는 지방의회의 의결, 2 법원 등의 재판
+### 2) 법적 성질이 달라 특별한 절차가 필요한 사항
+1 형사 관계 법령에 따라 행하는 사항"""
     segments = split_into_segments(md_script)
-    assert len(segments) >= 2
-    # 1. 원 칙에서 '1.' 때문에 오분할되지 않아야 함
-    first_p = segments[0]
-    assert any("1. 원 칙" in s.content for s in first_p.children)
-    # 마크다운 헤더 기호(##, ###)는 정제되어야 함
-    assert not any(s.content.startswith("##") or s.content.startswith("###") for s in first_p.children)
+    assert len(segments) == 2
+    
+    # 문단 1 검증
+    p1 = segments[0]
+    assert len(p1.children) == 2
+    assert p1.children[0].content == "1. 원 칙(제3조 제1항)"
+    assert p1.children[1].content == "행정절차법은 행정절차에 관한 일반법이다."
+
+    # 문단 2 검증 (소제목 ### 1), ### 2) 등이 문단 2 내의 세부 문장으로 귀속됨)
+    p2 = segments[1]
+    assert len(p2.children) == 5
+    assert p2.children[0].content == "2. 적용배제사항(제3조 제2항)"
+    assert p2.children[1].content == "1) 헌법상 독립기관 등의 판단을 거친 사항"
+    assert "1 국회" in p2.children[2].content
+    assert p2.children[3].content == "2) 법적 성질이 달라 특별한 절차가 필요한 사항"
+    assert "1 형사" in p2.children[4].content
+
 
 
 def test_diff_exact_match():

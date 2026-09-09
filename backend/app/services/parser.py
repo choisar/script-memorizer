@@ -82,14 +82,20 @@ def clean_markdown_line(line: str) -> str:
 def split_into_segments(full_text: str) -> List[ScriptSegment]:
     """
     전체 텍스트를 [문단 > 문장] 계층 구조의 ScriptSegment 리스트로 변환합니다.
-    - 줄바꿈 2회 이상(\n\n) 또는 마크다운 헤딩(#, ##, ###)을 문단 구분으로 처리합니다.
+    - 마크다운 대/중제목(#, ##)이 존재하는 경우, 대/중제목 단위로 문단을 묶어 하위 소제목(###) 및 항목들이 동일 문단 내 세부 문장으로 귀속되도록 합니다.
+    - 대/중제목이 없는 경우, 줄바꿈 2회 이상(\n\n)을 문단 구분으로 처리합니다.
     - 각 문단 내에서는 줄바꿈 및 문장 부호(.?!)를 기준으로 세부 문장으로 분할합니다.
     """
     normalized_text = full_text.replace("\r\n", "\n").replace("\r", "\n")
-    # 마크다운 헤딩(#) 앞에는 빈 줄이 없더라도 문단 경계로 취급되도록 \n\n 삽입
-    normalized_text = re.sub(r'(?m)^(?<!\n\n)(#{1,6}\s+)', r'\n\n\1', normalized_text)
 
-    raw_paragraphs = [p.strip() for p in re.split(r'\n\s*\n', normalized_text) if p.strip()]
+    # 문서에 마크다운 대/중제목(#, ##)이 포함되어 있으면 대/중제목 단위로 문단 분할
+    if re.search(r'(?m)^#{1,2}\s+', normalized_text):
+        raw_chunks = re.split(r'(?m)(?=^#{1,2}\s+)', normalized_text)
+        raw_paragraphs = [c.strip() for c in raw_chunks if c.strip()]
+    else:
+        # 일반 대본/텍스트의 경우 빈 줄(\n\n) 기준으로 문단 분할
+        raw_paragraphs = [p.strip() for p in re.split(r'\n\s*\n', normalized_text) if p.strip()]
+
 
     segments: List[ScriptSegment] = []
 

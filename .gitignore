@@ -74,8 +74,7 @@ Thumbs.db
 desktop.ini
 
 # Obsidian workspace cache (keep notes, ignore workspace UI state)
-.obsidian/workspace.json
-.obsidian/workspace-mobile.json
+.obsidian
 
 # Local temporary recordings
 *.webm

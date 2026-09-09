@@ -1,6 +1,15 @@
 import { UploadDocumentResponse, EvaluateResponse } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const getApiBase = () => {
+  let url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  url = url.trim();
+  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
+    url = `https://${url}`;
+  }
+  return url.replace(/\/+$/, "");
+};
+
+const API_BASE = getApiBase();
 
 /**
  * 대본 문서를 백엔드에 업로드하여 파싱된 계층 구조를 받아옵니다.

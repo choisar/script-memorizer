@@ -141,6 +141,7 @@ export const RecordButton: React.FC<RecordButtonProps> = ({
         {isRecording ? (
           <button
             type="button"
+            id="main-record-btn"
             onClick={handleStop}
             className="flex items-center justify-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold rounded-xl shadow-lg shadow-rose-200 transition-all duration-200 flex-1 min-w-[140px]"
           >
@@ -150,6 +151,7 @@ export const RecordButton: React.FC<RecordButtonProps> = ({
         ) : (
           <button
             type="button"
+            id="main-record-btn"
             onClick={handleStart}
             disabled={disabled || isEvaluating}
             className={`flex items-center justify-center gap-2 px-5 py-3 font-bold rounded-xl shadow-lg transition-all duration-200 flex-1 min-w-[140px] ${

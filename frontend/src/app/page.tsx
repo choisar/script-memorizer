@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useScript } from "@/hooks/useScript";
 import { ScriptViewer } from "@/components/ScriptViewer";
 import { RecordButton } from "@/components/RecordButton";
@@ -18,6 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  Volume2,
+  Mic,
+  Keyboard,
 } from "lucide-react";
 
 export default function Home() {
@@ -53,6 +56,69 @@ export default function Home() {
   const [directTitle, setDirectTitle] = useState("");
   const [directText, setDirectText] = useState("");
   const [showLegend, setShowLegend] = useState(false);
+  const [isHoldingRawText, setIsHoldingRawText] = useState(false);
+  const [showShortcutModal, setShowShortcutModal] = useState(false);
+
+  // 글로벌 키보드 단축키 등록
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 텍스트 직접 입력 폼이나 input 등에 포커스가 있을 때는 단축키 무시
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // 1. Space: 녹음 시작 / 완료 / 다시하기
+      if (e.code === "Space") {
+        e.preventDefault();
+        const btn = document.getElementById("main-record-btn");
+        if (btn) {
+          btn.click();
+        }
+        return;
+      }
+
+      // 2. 방향키 Left (←): 이전 문장/문단
+      if (e.code === "ArrowLeft") {
+        e.preventDefault();
+        if (hasPrev) {
+          goToPrev();
+        }
+        return;
+      }
+
+      // 3. 방향키 Right (→): 다음 문장/문단
+      if (e.code === "ArrowRight") {
+        e.preventDefault();
+        if (hasNext) {
+          goToNext();
+        }
+        return;
+      }
+
+      // 4. B 키 (한/영 ㅠ): 블라인드 모드 토글
+      if (e.key === "b" || e.key === "B" || e.key === "ㅠ") {
+        e.preventDefault();
+        toggleBlindMode();
+        return;
+      }
+
+      // 5. ? 키: 단축키 안내 팝업 토글
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowShortcutModal((prev) => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasPrev, hasNext, goToPrev, goToNext, toggleBlindMode]);
 
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,6 +176,15 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowShortcutModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200 shadow-sm"
+              title="단축키 안내 (단축키: ?)"
+            >
+              <Keyboard className="w-3.5 h-3.5" />
+              <span>단축키 안내</span>
+            </button>
+
             {segments.length > 0 && (
               <button
                 onClick={clearScript}
@@ -360,7 +435,27 @@ export default function Home() {
                 {evaluationResult && (
                   <div className="relative p-4 bg-slate-50/70 rounded-xl border border-slate-200 space-y-3 animate-fadeIn">
                     <div className="flex items-center justify-between text-xs border-b border-slate-200/60 pb-2">
-                      <span className="font-bold text-slate-700">발화 비교 분석</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-700">발화 비교 분석</span>
+                        <button
+                          type="button"
+                          onMouseDown={() => setIsHoldingRawText(true)}
+                          onMouseUp={() => setIsHoldingRawText(false)}
+                          onMouseLeave={() => setIsHoldingRawText(false)}
+                          onTouchStart={() => setIsHoldingRawText(true)}
+                          onTouchEnd={() => setIsHoldingRawText(false)}
+                          onTouchCancel={() => setIsHoldingRawText(false)}
+                          className={`select-none text-[11px] font-semibold px-2 py-0.5 rounded-md transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
+                            isHoldingRawText
+                              ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300"
+                              : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+                          }`}
+                          title="누르고 있는 동안 사용자가 입력한 발화 원문을 보여줍니다"
+                        >
+                          <Mic className="w-3 h-3" />
+                          {isHoldingRawText ? "누르는 중: 발화 원문 표시 중" : "꾹 눌러서 내 발화 원문 보기"}
+                        </button>
+                      </div>
                       <span
                         className={`px-2.5 py-0.5 rounded-full font-bold text-xs shadow-sm ${
                           evaluationResult.accuracy >= 90
@@ -374,39 +469,62 @@ export default function Home() {
                       </span>
                     </div>
 
-                    {/* Diff 하이라이팅 텍스트 */}
-                    <p className="text-slate-800 leading-relaxed break-keep font-medium text-base">
-                      {evaluationResult.diffs.map((chunk, index) => {
-                        if (chunk.type === "equal") {
-                          return (
-                            <span key={index} className="text-slate-800 font-normal">
-                              {chunk.text}
-                            </span>
-                          );
-                        } else if (chunk.type === "delete") {
-                          return (
-                            <span
-                              key={index}
-                              className="text-rose-600 font-semibold line-through bg-rose-50 px-1 py-0.5 rounded mx-0.5 decoration-rose-500 decoration-2"
-                              title="빠뜨린 대본"
-                            >
-                              {chunk.text}
-                            </span>
-                          );
-                        } else if (chunk.type === "insert") {
-                          return (
-                            <span
-                              key={index}
-                              className="text-blue-600 font-semibold underline bg-blue-50 px-1 py-0.5 rounded mx-0.5 decoration-blue-500 decoration-2"
-                              title="추가 또는 오답 발화"
-                            >
-                              {chunk.text}
-                            </span>
-                          );
-                        }
-                        return null;
-                      })}
-                    </p>
+                    {/* Diff 하이라이팅 또는 누르고 있는 동안 발화 원문 표시 */}
+                    <div
+                      className="select-none cursor-pointer transition-all duration-150"
+                      onMouseDown={() => setIsHoldingRawText(true)}
+                      onMouseUp={() => setIsHoldingRawText(false)}
+                      onMouseLeave={() => setIsHoldingRawText(false)}
+                      onTouchStart={() => setIsHoldingRawText(true)}
+                      onTouchEnd={() => setIsHoldingRawText(false)}
+                      onTouchCancel={() => setIsHoldingRawText(false)}
+                      title="누르고 있으면 내가 말한 원본을 보여주고 떼면 원래대로 돌아옵니다"
+                    >
+                      {isHoldingRawText ? (
+                        <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200 space-y-1 animate-fadeIn shadow-inner">
+                          <div className="flex items-center gap-1.5 text-xs text-indigo-700 font-bold">
+                            <Volume2 className="w-3.5 h-3.5 animate-pulse" />
+                            <span>사용자 음성 입력 원본 (손을 떼면 분석 결과로 복귀)</span>
+                          </div>
+                          <p className="text-slate-900 leading-relaxed break-keep font-medium text-base">
+                            {evaluationResult.transcribed_text || "(인식된 음성 발화 텍스트가 없습니다)"}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-slate-800 leading-relaxed break-keep font-medium text-base">
+                          {evaluationResult.diffs.map((chunk, index) => {
+                            if (chunk.type === "equal") {
+                              return (
+                                <span key={index} className="text-slate-800 font-normal">
+                                  {chunk.text}
+                                </span>
+                              );
+                            } else if (chunk.type === "delete") {
+                              return (
+                                <span
+                                  key={index}
+                                  className="text-rose-600 font-semibold line-through bg-rose-50 px-1 py-0.5 rounded mx-0.5 decoration-rose-500 decoration-2"
+                                  title="빠뜨린 대본"
+                                >
+                                  {chunk.text}
+                                </span>
+                              );
+                            } else if (chunk.type === "insert") {
+                              return (
+                                <span
+                                  key={index}
+                                  className="text-blue-600 font-semibold underline bg-blue-50 px-1 py-0.5 rounded mx-0.5 decoration-blue-500 decoration-2"
+                                  title="추가 또는 오답 발화"
+                                >
+                                  {chunk.text}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })}
+                        </p>
+                      )}
+                    </div>
 
                     {/* 범례 토글 및 STT 음성 원문 */}
                     <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
@@ -469,6 +587,120 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* 화면 하단 슬림 플로팅 단축키 안내 바 (대본 로드 시 표시) */}
+      {segments.length > 0 && (
+        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 bg-slate-900/90 text-slate-200 px-4 py-2 rounded-full shadow-2xl border border-slate-700/70 backdrop-blur transition-all flex items-center gap-3 sm:gap-4 text-xs select-none">
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-[11px] font-mono text-indigo-300 font-bold shadow-sm">Space</kbd>
+            <span className="font-medium text-slate-300">녹음 / 완료</span>
+          </div>
+          <span className="text-slate-700 hidden sm:inline">|</span>
+          <div className="hidden sm:flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-[11px] font-mono text-indigo-300 font-bold shadow-sm">←</kbd>
+            <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-[11px] font-mono text-indigo-300 font-bold shadow-sm">→</kbd>
+            <span className="font-medium text-slate-300">이전 / 다음</span>
+          </div>
+          <span className="text-slate-700 hidden md:inline">|</span>
+          <div className="hidden md:flex items-center gap-1.5">
+            <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-[11px] font-mono text-indigo-300 font-bold shadow-sm">B</kbd>
+            <span className="font-medium text-slate-300">블라인드</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowShortcutModal(true)}
+            className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold underline pl-1"
+          >
+            전체 보기
+          </button>
+        </div>
+      )}
+
+      {/* 키보드 단축키 상세 안내 모달 */}
+      {showShortcutModal && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setShowShortcutModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-5 animate-scaleUp text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                  <Keyboard className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">키보드 단축키 안내</h3>
+                  <p className="text-xs text-slate-500">키보드로 마우스 없이 빠르게 훈련하세요</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShortcutModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-sm">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2 py-1 bg-white border border-slate-300 rounded-md font-mono text-xs font-bold text-slate-700 shadow-sm min-w-[56px] text-center">
+                    Space
+                  </kbd>
+                  <span className="text-slate-700 font-medium">녹음 시작 / 녹음 완료 / 다시하기</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    <kbd className="px-2 py-1 bg-white border border-slate-300 rounded-md font-mono text-xs font-bold text-slate-700 shadow-sm min-w-[28px] text-center">
+                      ←
+                    </kbd>
+                    <kbd className="px-2 py-1 bg-white border border-slate-300 rounded-md font-mono text-xs font-bold text-slate-700 shadow-sm min-w-[28px] text-center">
+                      →
+                    </kbd>
+                  </div>
+                  <span className="text-slate-700 font-medium">이전 구간 / 다음 구간 이동</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2 py-1 bg-white border border-slate-300 rounded-md font-mono text-xs font-bold text-slate-700 shadow-sm min-w-[28px] text-center">
+                    B
+                  </kbd>
+                  <span className="text-slate-700 font-medium">블라인드 모드 On / Off (흐림 효과 토글)</span>
+                </div>
+                <span className="text-[11px] text-slate-400">한글 'ㅠ' 지원</span>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center gap-2">
+                  <kbd className="px-2 py-1 bg-white border border-slate-300 rounded-md font-mono text-xs font-bold text-slate-700 shadow-sm min-w-[28px] text-center">
+                    ?
+                  </kbd>
+                  <span className="text-slate-700 font-medium">이 단축키 도움말 창 열기 / 닫기</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => setShowShortcutModal(false)}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
+              >
+                확인하고 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

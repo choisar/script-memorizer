@@ -445,44 +445,20 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 3. 녹음 시작/중지 및 자동 평가 트리거 */}
+                {/* 3. 통합 제어 버튼 바: [ 이전 ]  [ 블라인드 암기 테스트 시작 / 다시하기 ]  [ 다음 ] */}
                 <RecordButton
                   disabled={!selectedSegment}
                   isEvaluating={isEvaluating}
+                  isRetry={!!evaluationResult}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  onPrev={goToPrev}
+                  onNext={goToNext}
                   onStartBlindTest={() => {
                     if (!isBlindMode) toggleBlindMode();
                   }}
                   onEvaluate={evaluate}
                 />
-
-                {/* 4. 하단 제어 버튼 바: [ 이전 ]  [ 다시하기 ]  [ 다음 ] */}
-                <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={goToPrev}
-                    disabled={!hasPrev}
-                    className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none shadow-md shadow-indigo-100 transition-all flex-1 sm:flex-initial min-w-[96px]"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    이전
-                  </button>
-
-                  <button
-                    onClick={handleRetry}
-                    className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100 transition-all flex-1 sm:flex-initial min-w-[110px]"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    다시하기
-                  </button>
-
-                  <button
-                    onClick={goToNext}
-                    disabled={!hasNext}
-                    className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none shadow-md shadow-indigo-100 transition-all flex-1 sm:flex-initial min-w-[96px]"
-                  >
-                    다음
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
             </div>
           </div>

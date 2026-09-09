@@ -43,7 +43,10 @@ export default function Home() {
     goToPrev,
     goToNext,
     handleRetry,
+    isRetry,
+    resetEvaluation,
   } = useScript();
+
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDirectInput, setShowDirectInput] = useState(false);
@@ -449,12 +452,14 @@ export default function Home() {
                 <RecordButton
                   disabled={!selectedSegment}
                   isEvaluating={isEvaluating}
-                  isRetry={!!evaluationResult}
+                  isRetry={isRetry}
                   hasPrev={hasPrev}
                   hasNext={hasNext}
                   onPrev={goToPrev}
                   onNext={goToNext}
                   onStartBlindTest={() => {
+                    // 다시하기/새 테스트 시작 시 기존 음성 인식 텍스트 및 Diff 결과 즉시 제거
+                    resetEvaluation();
                     if (!isBlindMode) toggleBlindMode();
                   }}
                   onEvaluate={evaluate}

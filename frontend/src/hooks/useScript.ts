@@ -13,6 +13,7 @@ export function useScript() {
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [attemptedSegmentIds, setAttemptedSegmentIds] = useState<Set<string>>(new Set());
 
   const handleUpload = useCallback(async (file: File) => {
     setIsUploading(true);
@@ -29,6 +30,7 @@ export function useScript() {
       }
       setEvaluationResult(null);
       setIsBlindMode(false);
+      setAttemptedSegmentIds(new Set());
     } catch (err: any) {
       setError(err.message || "문서 업로드 실패");
     } finally {
@@ -54,6 +56,7 @@ export function useScript() {
       }
       setEvaluationResult(null);
       setIsBlindMode(false);
+      setAttemptedSegmentIds(new Set());
     } catch (err: any) {
       setError(err.message || "텍스트 파싱 실패");
     } finally {
@@ -70,6 +73,10 @@ export function useScript() {
     setIsBlindMode((prev) => !prev);
   }, []);
 
+  const resetEvaluation = useCallback(() => {
+    setEvaluationResult(null);
+  }, []);
+
   const evaluate = useCallback(async (audioBlob: Blob, liveText?: string) => {
     if (!selectedSegment) return;
 
@@ -78,6 +85,7 @@ export function useScript() {
     try {
       const result = await evaluateAudio(audioBlob, selectedSegment.content, liveText);
       setEvaluationResult(result);
+      setAttemptedSegmentIds((prev) => new Set(prev).add(selectedSegment.id));
       // 평가가 끝나면 블라인드 해제하여 결과를 바로 볼 수 있게 함
       setIsBlindMode(false);
     } catch (err: any) {
@@ -94,7 +102,9 @@ export function useScript() {
     setIsBlindMode(false);
     setEvaluationResult(null);
     setError(null);
+    setAttemptedSegmentIds(new Set());
   }, []);
+
 
   // 현재 모드(문단 vs 문장)에 따른 전체 탐색 목록
   const allUnits = useMemo(() => {
@@ -136,6 +146,8 @@ export function useScript() {
     setIsBlindMode(true);
   }, []);
 
+  const isRetry = Boolean(selectedSegment && attemptedSegmentIds.has(selectedSegment.id));
+
   return {
     segments,
     filename,
@@ -149,6 +161,7 @@ export function useScript() {
     handleDirectText,
     selectSegment,
     toggleBlindMode,
+    resetEvaluation,
     evaluate,
     clearScript,
     allUnits,
@@ -158,7 +171,9 @@ export function useScript() {
     goToPrev,
     goToNext,
     handleRetry,
+    isRetry,
   };
 }
+
 
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { ScriptSegment, EvaluateResponse } from "@/types";
 import { uploadDocument, parseText, evaluateAudio } from "@/services/api";
 
@@ -61,7 +61,6 @@ export function useScript() {
     }
   }, []);
 
-
   const selectSegment = useCallback((segment: ScriptSegment) => {
     setSelectedSegment(segment);
     setEvaluationResult(null);
@@ -97,6 +96,46 @@ export function useScript() {
     setError(null);
   }, []);
 
+  // 현재 모드(문단 vs 문장)에 따른 전체 탐색 목록
+  const allUnits = useMemo(() => {
+    if (!selectedSegment) return [];
+    if (selectedSegment.type === "paragraph") {
+      return segments;
+    }
+    // 문장 단위 모드: 모든 문단들의 하위 문장 평탄화
+    const flattened = segments.flatMap((p) => (p.children.length > 0 ? p.children : [p]));
+    return flattened;
+  }, [segments, selectedSegment]);
+
+  const currentIndex = useMemo(() => {
+    if (!selectedSegment || allUnits.length === 0) return -1;
+    return allUnits.findIndex((u) => u.id === selectedSegment.id);
+  }, [allUnits, selectedSegment]);
+
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex >= 0 && currentIndex < allUnits.length - 1;
+
+  const goToPrev = useCallback(() => {
+    if (hasPrev) {
+      setSelectedSegment(allUnits[currentIndex - 1]);
+      setEvaluationResult(null);
+      setIsBlindMode(false);
+    }
+  }, [hasPrev, allUnits, currentIndex]);
+
+  const goToNext = useCallback(() => {
+    if (hasNext) {
+      setSelectedSegment(allUnits[currentIndex + 1]);
+      setEvaluationResult(null);
+      setIsBlindMode(false);
+    }
+  }, [hasNext, allUnits, currentIndex]);
+
+  const handleRetry = useCallback(() => {
+    setEvaluationResult(null);
+    setIsBlindMode(true);
+  }, []);
+
   return {
     segments,
     filename,
@@ -112,6 +151,14 @@ export function useScript() {
     toggleBlindMode,
     evaluate,
     clearScript,
+    allUnits,
+    currentIndex,
+    hasPrev,
+    hasNext,
+    goToPrev,
+    goToNext,
+    handleRetry,
   };
 }
+
 

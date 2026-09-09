@@ -15,6 +15,9 @@ import {
   Edit3,
   Check,
   X,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
 } from "lucide-react";
 
 export default function Home() {
@@ -33,12 +36,21 @@ export default function Home() {
     toggleBlindMode,
     evaluate,
     clearScript,
+    allUnits,
+    currentIndex,
+    hasPrev,
+    hasNext,
+    goToPrev,
+    goToNext,
+    handleRetry,
   } = useScript();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDirectInput, setShowDirectInput] = useState(false);
   const [directTitle, setDirectTitle] = useState("");
   const [directText, setDirectText] = useState("");
+  const [showLegend, setShowLegend] = useState(false);
+
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -280,8 +292,9 @@ export default function Home() {
 
             {/* 우측 컬럼: 테스트 제어판 & Diff 피드백 결과 */}
             <div className="lg:col-span-6 xl:col-span-5 space-y-6">
-              {/* 선택된 구간 및 암기 테스트 패널 */}
-              <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6 space-y-5">
+              {/* 선택된 구간 및 암기 테스트 패널 (사용자 요청 통합 카드 UI) */}
+              <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6 space-y-5">
+                {/* 상단 헤더 영역 */}
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
                     <span className="text-xs font-semibold uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
@@ -291,6 +304,11 @@ export default function Home() {
                     </span>
                     <h3 className="text-base font-bold text-slate-800 mt-1">
                       테스트 대상 구간
+                      {allUnits.length > 0 && currentIndex >= 0 && (
+                        <span className="ml-2 text-xs font-normal text-slate-400">
+                          ({currentIndex + 1} / {allUnits.length})
+                        </span>
+                      )}
                     </h3>
                   </div>
 
@@ -315,10 +333,10 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* 현재 선택된 대본 내용 */}
-                <div className="relative min-h-[90px] p-4 bg-slate-50 rounded-xl border border-slate-200">
+                {/* 1. 현재 원본 대본 내용 박스 */}
+                <div className="relative min-h-[84px] p-4 bg-slate-50/70 rounded-xl border border-slate-200 flex items-center">
                   <p
-                    className={`text-slate-800 leading-relaxed break-keep font-medium transition-all duration-300 ${
+                    className={`text-slate-800 leading-relaxed break-keep font-medium text-base w-full transition-all duration-300 ${
                       isBlindMode
                         ? "filter blur-md select-none bg-slate-200 text-transparent"
                         : ""
@@ -335,24 +353,137 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* 녹음 시작/중지 및 자동 평가 트리거 */}
+                {/* 2. STT 비교 결과 (Diff) 박스 - 평가 결과가 있을 때 바로 표시 */}
+                {evaluationResult && (
+                  <div className="relative p-4 bg-slate-50/70 rounded-xl border border-slate-200 space-y-3 animate-fadeIn">
+                    <div className="flex items-center justify-between text-xs border-b border-slate-200/60 pb-2">
+                      <span className="font-bold text-slate-700">발화 비교 분석</span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full font-bold text-xs shadow-sm ${
+                          evaluationResult.accuracy >= 90
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            : evaluationResult.accuracy >= 70
+                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                            : "bg-rose-100 text-rose-800 border border-rose-200"
+                        }`}
+                      >
+                        일치율 {evaluationResult.accuracy}%
+                      </span>
+                    </div>
+
+                    {/* Diff 하이라이팅 텍스트 */}
+                    <p className="text-slate-800 leading-relaxed break-keep font-medium text-base">
+                      {evaluationResult.diffs.map((chunk, index) => {
+                        if (chunk.type === "equal") {
+                          return (
+                            <span key={index} className="text-slate-800 font-normal">
+                              {chunk.text}
+                            </span>
+                          );
+                        } else if (chunk.type === "delete") {
+                          return (
+                            <span
+                              key={index}
+                              className="text-rose-600 font-semibold line-through bg-rose-50 px-1 py-0.5 rounded mx-0.5 decoration-rose-500 decoration-2"
+                              title="빠뜨린 대본"
+                            >
+                              {chunk.text}
+                            </span>
+                          );
+                        } else if (chunk.type === "insert") {
+                          return (
+                            <span
+                              key={index}
+                              className="text-blue-600 font-semibold underline bg-blue-50 px-1 py-0.5 rounded mx-0.5 decoration-blue-500 decoration-2"
+                              title="추가 또는 오답 발화"
+                            >
+                              {chunk.text}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })}
+                    </p>
+
+                    {/* 범례 토글 및 STT 음성 원문 */}
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
+                      <button
+                        type="button"
+                        onClick={() => setShowLegend((prev) => !prev)}
+                        className="hover:text-indigo-600 font-medium flex items-center gap-1 transition-colors"
+                      >
+                        범례: {showLegend ? "접기" : "펼치기"}
+                      </button>
+
+                      {evaluationResult.transcribed_text && (
+                        <span
+                          className="text-[11px] text-slate-400 italic truncate max-w-[220px]"
+                          title={evaluationResult.transcribed_text}
+                        >
+                          "{evaluationResult.transcribed_text}"
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 펼쳐진 범례 안내 */}
+                    {showLegend && (
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] bg-white p-2.5 rounded-lg border border-slate-200 text-slate-600">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-slate-700 inline-block"></span>
+                          <span>정확함</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-rose-600">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block"></span>
+                          <span className="line-through">빠뜨린 부분</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-blue-600">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block"></span>
+                          <span className="underline">추가/오답</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. 녹음 시작/중지 및 자동 평가 트리거 */}
                 <RecordButton
                   disabled={!selectedSegment}
                   isEvaluating={isEvaluating}
                   onStartBlindTest={() => {
-                    // 녹음 시작 시 자동으로 대본을 가림
                     if (!isBlindMode) toggleBlindMode();
                   }}
                   onEvaluate={evaluate}
                 />
-              </div>
 
-              {/* STT 비교 결과 및 시각화 피드백 영역 */}
-              {evaluationResult && (
-                <div className="transition-all duration-300">
-                  <DiffHighlighter evaluation={evaluationResult} />
+                {/* 4. 하단 제어 버튼 바: [ 이전 ]  [ 다시하기 ]  [ 다음 ] */}
+                <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    onClick={goToPrev}
+                    disabled={!hasPrev}
+                    className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none shadow-md shadow-indigo-100 transition-all flex-1 sm:flex-initial min-w-[96px]"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    이전
+                  </button>
+
+                  <button
+                    onClick={handleRetry}
+                    className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100 transition-all flex-1 sm:flex-initial min-w-[110px]"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    다시하기
+                  </button>
+
+                  <button
+                    onClick={goToNext}
+                    disabled={!hasNext}
+                    className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none shadow-md shadow-indigo-100 transition-all flex-1 sm:flex-initial min-w-[96px]"
+                  >
+                    다음
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
